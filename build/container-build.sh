@@ -11,9 +11,6 @@ export KBUILD_BUILD_USER=builder KBUILD_BUILD_HOST=esp32-repro
 export KBUILD_BUILD_TIMESTAMP='Sat Sep 5 00:00:00 UTC 2026' KBUILD_BUILD_VERSION=1
 export SOURCE_DATE_EPOCH=1788566400
 export GIT_AUTHOR_DATE='2026-09-05T00:00:00+00:00' GIT_COMMITTER_DATE='2026-09-05T00:00:00+00:00'
-# Keep the ESP-IDF tools inside the work directory: they are a pure input,
-# so continuous integration caches them across runs (see build/README.md).
-export IDF_TOOLS_PATH="$work/idf-tools"
 mkdir -p "$work/refs" "$work/logs" "$work/stages" "$work/artifacts"
 driver="$work/refs/esp32-linux-build"
 base="$driver/build"

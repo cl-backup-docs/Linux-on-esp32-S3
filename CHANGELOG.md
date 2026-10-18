@@ -38,13 +38,15 @@ notes and the binaries are on the
   now needs **BOOT+RESET** instead of the automatic reset. Use an OTG adapter
   (USB-C male to USB-A female) and a standard boot-protocol keyboard.
 - The manual `Image` workflow now caches the expensive stages between runs in
-  a fixed work directory: the built Linux toolchain, the Buildroot output and
-  downloads, the ESP-IDF tree and tools, and the compiled userspace. Each key
+  a fixed work directory: the built Linux toolchain, the Buildroot output, the
+  ESP-IDF tree and the compiled userspace, about 1.5 GB together. Each key
   hashes every file its stage reads, so a hit means unchanged inputs; any
   change or a missing cache rebuilds that stage from source exactly as
-  before. Warm runs drop from about 75 minutes to roughly 15–25, and both
-  matrix builds still compare byte for byte. Local `build/reproduce.sh` runs
-  are unchanged unless `REPRODUCE_DIR` selects a directory explicitly.
+  before. Warm builds drop from about 55 minutes to about five, and both
+  matrix builds still compare byte for byte. The Buildroot download mirror and
+  the ESP-IDF tool install are not cached: gigabytes for the minute or two
+  they would save. Local `build/reproduce.sh` runs are unchanged unless
+  `REPRODUCE_DIR` selects a directory explicitly.
 
 ## 0.7 — fork, Bash and a userspace that fits (2026-09-08)
 

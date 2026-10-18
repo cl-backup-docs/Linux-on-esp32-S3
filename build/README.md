@@ -96,10 +96,13 @@ HEAD, every file that stage reads — the pinned revisions, the build scripts,
 the patches and sources the stage injects, and for the rootfs, firmware and
 userspace stages the inputs of every earlier stage as well — so a hit restores
 exactly what a clean build of this commit would have produced, and any change
-falls back to rebuilding that stage from source. The Buildroot download and ESP-IDF tools
-entries hold only upstream archives that their own manifests verify, and are
-the only ones with a prefix fallback. An entry is saved only when a whole run
-succeeds, so a cache can never resume from a half-failed build.
+falls back to rebuilding that stage from source. The four entries — toolchain,
+rootfs, firmware and userspace — total about 1.5 GB. The Buildroot download
+mirror and the ESP-IDF tool install are deliberately not cached: they are
+gigabytes that only a rebuilding stage would read, for a minute or two saved.
+No entry uses `restore-keys`, so a cache can never resume a stage from a
+partial match. An entry is saved only when a whole run succeeds, so a cache
+can never resume from a half-failed build.
 
 Both matrix jobs restore the same entries, and the comparison job still
 compares two builds made in the same run, so the "two builds agree" guarantee
@@ -112,11 +115,12 @@ changing what a stage reads, extend that stage's list in
 than an error. A run on a fresh branch, or after deleting the caches in the
 repository's Actions settings, starts cold on purpose.
 
-Expect a cold run (no usable cache) to take a couple of hours; a warm run
-rebuilds only what changed and finishes in well under half an hour once the
-caches are restored. The job limit is six hours. The runner has no board, so
-`board_verification` stays `pending` in the manifest: flashing and the 27
-board tests are still a local step.
+Expect a cold run (no usable cache) to spend about an hour on each of the two
+builds, and a fully warm one about five minutes. A run that changes firmware
+sources rebuilds the firmware stage only; changing the rootfs reaches the
+firmware and userspace stages as well. The job limit is six hours. The runner
+has no board, so `board_verification` stays `pending` in the manifest: flashing
+and the 27 board tests are still a local step.
 
 The older `build-linux.yml` builds the base system only and is kept for
 rebuilding that path; it is not the pipeline that produces the released image.

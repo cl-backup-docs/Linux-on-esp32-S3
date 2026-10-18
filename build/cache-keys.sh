@@ -8,11 +8,9 @@
 # on those) or by uncommitted working-tree edits, and one hash per key stays
 # inside the 512-character cache-key limit however many paths a stage reads.
 #
-# Every output cache also depends on the build procedure and the pinned
-# revisions, and each later stage's key includes the inputs of the stages
-# before it, so one stage's cache can never be restored while an earlier
-# stage's inputs changed. The download and tools entries hold only upstream
-# archives and get a prefix fallback on top of this key.
+# Every key also depends on the build procedure and the pinned revisions, and
+# each later stage's key includes the inputs of the stages before it, so one
+# stage's cache can never be restored while an earlier stage's inputs changed.
 #
 # Add a path here when a stage starts reading it; a file missing from a list
 # means a cache can resume a stage whose input has changed.
@@ -36,9 +34,7 @@ userspace_extra='experiments paperboard/linux/epd-shell.c'
 # shellcheck disable=SC2086
 {
 	echo "toolchain=$(digest $common)"
-	echo "buildroot_dl=$(digest build/sources.lock)"
 	echo "rootfs=$(digest $common $rootfs_extra)"
 	echo "firmware=$(digest $common $rootfs_extra $firmware_extra)"
-	echo "idf_tools=$(digest build/sources.lock)"
 	echo "userspace=$(digest $common $rootfs_extra $userspace_extra)"
 }

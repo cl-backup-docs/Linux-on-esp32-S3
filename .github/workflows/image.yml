@@ -90,11 +90,11 @@ jobs:
       # resumes the pipeline where the inputs did not change, and a miss
       # rebuilds the stage exactly as before. build/cache-keys.sh hashes
       # every file a stage reads straight from HEAD -- see that script
-      # before adding a file to a stage. The output caches deliberately
-      # have no restore-keys -- resuming a stage from a partial match could
-      # mix outputs from changed inputs. The download and tools caches only
-      # hold upstream artifacts, checked by their own manifests, so those
-      # do use a prefix fallback.
+      # before adding a file to a stage. The caches deliberately have no
+      # restore-keys: resuming a stage from a partial match could mix
+      # outputs from changed inputs. The Buildroot download mirror and the
+      # ESP-IDF tool install are not cached either: they are gigabytes for
+      # a minute or two saved only when a stage actually rebuilds.
 
       - name: Compute the cache keys
         id: keys
@@ -110,13 +110,6 @@ jobs:
             build-output/reproduce.ci/refs/esp32-linux-build/build/esp32s3
             build-output/reproduce.ci/stages/toolchain.done
           key: toolchain-${{ steps.keys.outputs.toolchain }}
-
-      - name: Restore the Buildroot downloads cache
-        uses: actions/cache@v6
-        with:
-          path: build-output/reproduce.ci/refs/esp32-linux-build/build/buildroot/dl
-          key: buildroot-dl-${{ steps.keys.outputs.buildroot_dl }}
-          restore-keys: buildroot-dl-
 
       - name: Restore the rootfs cache
         uses: actions/cache@v6
@@ -136,13 +129,6 @@ jobs:
             build-output/reproduce.ci/stages/firmware.done
           key: firmware-${{ steps.keys.outputs.firmware }}
 
-      - name: Restore the ESP-IDF tools cache
-        uses: actions/cache@v6
-        with:
-          path: build-output/reproduce.ci/idf-tools
-          key: idf-tools-${{ steps.keys.outputs.idf_tools }}
-          restore-keys: idf-tools-
-
       - name: Restore the userspace cache
         uses: actions/cache@v6
         with:
@@ -159,15 +145,17 @@ jobs:
       - name: Report the cache directory sizes
         if: always()
         run: |
+          # The four cached sets, so their sizes can be summed at a glance.
           for d in \
-              build-output/reproduce.ci/refs/esp32-linux-build/build/crosstool-NG \
-              build-output/reproduce.ci/refs/esp32-linux-build/build/buildroot/dl \
+              build-output/reproduce.ci/refs/esp32-linux-build/build/crosstool-NG/.config \
+              build-output/reproduce.ci/refs/esp32-linux-build/build/crosstool-NG/builds \
+              build-output/reproduce.ci/refs/esp32-linux-build/build/xtensa-dynconfig \
+              build-output/reproduce.ci/refs/esp32-linux-build/build/esp32s3 \
               build-output/reproduce.ci/refs/esp32-linux-build/build/build-buildroot-esp32s3_devkit_c1_16m \
               build-output/reproduce.ci/refs/esp32-linux-build/build/esp-hosted \
-              build-output/reproduce.ci/idf-tools \
-              build-output/reproduce.ci/Linux-on-esp32-S3/experiments/mmu-poc/out \
-              build-output/reproduce.ci/Linux-on-esp32-S3/images \
               build-output/reproduce.ci/base-images \
+              build-output/reproduce.ci/Linux-on-esp32-S3/images \
+              build-output/reproduce.ci/Linux-on-esp32-S3/experiments/mmu-poc/out \
               build-output/reproduce.ci/artifacts \
               build-output/reproduce.ci/stages; do
             if [ -e "$d" ]; then
