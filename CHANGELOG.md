@@ -37,6 +37,14 @@ notes and the binaries are on the
   IDF logs stay on UART0 (the COM port); flashing through the native USB port
   now needs **BOOT+RESET** instead of the automatic reset. Use an OTG adapter
   (USB-C male to USB-A female) and a standard boot-protocol keyboard.
+- The manual `Image` workflow now caches the expensive stages between runs in
+  a fixed work directory: the built Linux toolchain, the Buildroot output and
+  downloads, the ESP-IDF tree and tools, and the compiled userspace. Each key
+  hashes every file its stage reads, so a hit means unchanged inputs; any
+  change or a missing cache rebuilds that stage from source exactly as
+  before. Warm runs drop from about 75 minutes to roughly 15–25, and both
+  matrix builds still compare byte for byte. Local `build/reproduce.sh` runs
+  are unchanged unless `REPRODUCE_DIR` selects a directory explicitly.
 
 ## 0.7 — fork, Bash and a userspace that fits (2026-09-08)
 

@@ -12,7 +12,15 @@ if [ -n "$dirty" ]; then
 fi
 test "$(id -u)" != 0 || { echo 'Run as a regular user with Docker access.' >&2; exit 1; }
 mkdir -p build-output
-work=$(mktemp -d "$repo/build-output/reproduce.XXXXXX")
+if [ -n "${REPRODUCE_DIR:-}" ]; then
+	# Continuous integration restores its caches into a fixed directory and
+	# resumes the stages whose inputs did not change. Local runs keep a fresh
+	# directory unless they ask for one explicitly.
+	mkdir -p "$REPRODUCE_DIR"
+	work=$(cd -- "$REPRODUCE_DIR" && pwd)
+else
+	work=$(mktemp -d "$repo/build-output/reproduce.XXXXXX")
+fi
 mkdir -p "$work/Linux-on-esp32-S3" "$work/logs"
 git archive HEAD | tar -x --exclude=images -C "$work/Linux-on-esp32-S3"
 git rev-parse HEAD > "$work/source-commit.txt"

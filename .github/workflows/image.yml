@@ -57,6 +57,12 @@ jobs:
       matrix:
         run: [1, 2]
 
+    env:
+      # A fixed work directory lets the cache steps below restore a previous
+      # run's completed stages. On a miss the stage is rebuilt from source,
+      # exactly as a local reproduce.sh run would.
+      REPRODUCE_DIR: ${{ github.workspace }}/build-output/reproduce.ci
+
     steps:
       - name: Free disk space
         run: |
@@ -78,8 +84,118 @@ jobs:
           test -n "$(git config user.name)"
           test -n "$(git config user.email)"
 
+      # Each cache below carries one stage's outputs plus its done-marker.
+      # container-build.sh skips a stage whose marker is present, so a hit
+      # resumes the pipeline where the inputs did not change, and a miss
+      # rebuilds the stage exactly as before.
+      #
+      # A key names every file the stage reads, which is what makes a hit
+      # safe: the restored outputs were produced from these exact inputs.
+      # The output caches deliberately have no restore-keys -- resuming a
+      # stage from a partial match could mix outputs from changed inputs.
+      # The download and tools caches only hold upstream artifacts, checked
+      # by their own manifests, so those do use a prefix fallback.
+
+      - name: Restore the toolchain cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            build-output/reproduce.ci/refs/esp32-linux-build/build/crosstool-NG/.config
+            build-output/reproduce.ci/refs/esp32-linux-build/build/crosstool-NG/builds
+            build-output/reproduce.ci/refs/esp32-linux-build/build/xtensa-dynconfig
+            build-output/reproduce.ci/refs/esp32-linux-build/build/esp32s3
+            build-output/reproduce.ci/stages/toolchain.done
+          key: >-
+            toolchain-${{
+            hashFiles('build/sources.lock', 'build/container-build.sh', 'build/pin-toolchain.py') }}
+
+      - name: Restore the Buildroot downloads cache
+        uses: actions/cache@v6
+        with:
+          path: build-output/reproduce.ci/refs/esp32-linux-build/build/buildroot/dl
+          key: buildroot-dl-${{ hashFiles('build/sources.lock') }}
+          restore-keys: buildroot-dl-
+
+      - name: Restore the rootfs cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            build-output/reproduce.ci/refs/esp32-linux-build/build/build-buildroot-esp32s3_devkit_c1_16m
+            build-output/reproduce.ci/stages/base-rootfs.done
+          key: >-
+            rootfs-${{
+            hashFiles('build/sources.lock', 'build/container-build.sh', 'build/pin-toolchain.py',
+            'new-files/board/**', 'new-files/configs/**',
+            'new-files/toplevel/apply-local-changes.sh',
+            'patches/03-buildroot-tracked-changes.patch') }}
+
+      - name: Restore the firmware cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            build-output/reproduce.ci/refs/esp32-linux-build/build/esp-hosted
+            build-output/reproduce.ci/base-images
+            build-output/reproduce.ci/Linux-on-esp32-S3/images
+            build-output/reproduce.ci/stages/firmware.done
+          key: >-
+            firmware-${{
+            hashFiles('build/sources.lock', 'build/container-build.sh', 'build/pin-toolchain.py',
+            'new-files/board/**', 'new-files/configs/**',
+            'new-files/toplevel/apply-local-changes.sh',
+            'patches/03-buildroot-tracked-changes.patch',
+            'patches/02-firmware-network-adapter.patch', 'patches/05-firmware-usb-keyboard.patch',
+            'new-files/esp-hosted/**', 'paperboard/st7789/**',
+            'paperboard/linux/pb_console.c', 'paperboard/linux/usb_kbd.c',
+            'paperboard/common/terminal.c', 'paperboard/common/terminal.h',
+            'paperboard/common/hid_keymap.c', 'paperboard/common/hid_keymap.h',
+            'paperboard/common/font8x16_basic.h') }}
+
+      - name: Restore the ESP-IDF tools cache
+        uses: actions/cache@v6
+        with:
+          path: build-output/reproduce.ci/idf-tools
+          key: idf-tools-${{ hashFiles('build/sources.lock') }}
+          restore-keys: idf-tools-
+
+      - name: Restore the userspace cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            build-output/reproduce.ci/Linux-on-esp32-S3/experiments/mmu-poc/out
+            build-output/reproduce.ci/artifacts/rootfs.cramfs
+            build-output/reproduce.ci/artifacts/rootfs.json
+            build-output/reproduce.ci/stages/userspace.done
+          key: >-
+            userspace-${{
+            hashFiles('build/sources.lock', 'build/container-build.sh', 'build/pin-toolchain.py',
+            'new-files/board/**', 'new-files/configs/**',
+            'new-files/toplevel/apply-local-changes.sh',
+            'patches/03-buildroot-tracked-changes.patch',
+            'experiments/**', 'paperboard/linux/epd-shell.c') }}
+
       - name: Build everything from pinned sources
         run: JOBS=$(nproc) bash build/reproduce.sh
+
+      - name: Report the cache directory sizes
+        if: always()
+        run: |
+          for d in \
+              build-output/reproduce.ci/refs/esp32-linux-build/build/crosstool-NG \
+              build-output/reproduce.ci/refs/esp32-linux-build/build/buildroot/dl \
+              build-output/reproduce.ci/refs/esp32-linux-build/build/build-buildroot-esp32s3_devkit_c1_16m \
+              build-output/reproduce.ci/refs/esp32-linux-build/build/esp-hosted \
+              build-output/reproduce.ci/idf-tools \
+              build-output/reproduce.ci/Linux-on-esp32-S3/experiments/mmu-poc/out \
+              build-output/reproduce.ci/Linux-on-esp32-S3/images \
+              build-output/reproduce.ci/base-images \
+              build-output/reproduce.ci/artifacts \
+              build-output/reproduce.ci/stages; do
+            if [ -e "$d" ]; then
+              du -sh "$d"
+            else
+              echo "missing  $d"
+            fi
+          done
 
       - name: Report the disk left
         if: always()

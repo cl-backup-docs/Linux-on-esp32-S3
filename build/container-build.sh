@@ -11,6 +11,9 @@ export KBUILD_BUILD_USER=builder KBUILD_BUILD_HOST=esp32-repro
 export KBUILD_BUILD_TIMESTAMP='Sat Sep 5 00:00:00 UTC 2026' KBUILD_BUILD_VERSION=1
 export SOURCE_DATE_EPOCH=1788566400
 export GIT_AUTHOR_DATE='2026-09-05T00:00:00+00:00' GIT_COMMITTER_DATE='2026-09-05T00:00:00+00:00'
+# Keep the ESP-IDF tools inside the work directory: they are a pure input,
+# so continuous integration caches them across runs (see build/README.md).
+export IDF_TOOLS_PATH="$work/idf-tools"
 mkdir -p "$work/refs" "$work/logs" "$work/stages" "$work/artifacts"
 driver="$work/refs/esp32-linux-build"
 base="$driver/build"
@@ -75,12 +78,18 @@ rootfs_base() {
     test "$(readlink "$driver/local-changes")" = "$repo"
     cd "$driver"
     ./apply-local-changes.sh buildroot
-    make -C "$base/buildroot" O="$br" esp32s3_devkit_c1_16m_defconfig
-    "$base/buildroot/utils/config" --file "$br/.config" --set-str TOOLCHAIN_EXTERNAL_PATH "$base/crosstool-NG/builds/xtensa-esp32s3-linux-uclibcfdpic"
-    "$base/buildroot/utils/config" --file "$br/.config" --set-str TOOLCHAIN_EXTERNAL_CUSTOM_PREFIX '$(ARCH)-esp32s3-linux-uclibcfdpic'
-    "$base/buildroot/utils/config" --file "$br/.config" --undefine PRIMARY_SITE --set-str PRIMARY_SITE 'https://sources.buildroot.net'
+    # A restored key includes the generated .config; regenerating it would
+    # only churn timestamps. The greps below prove it still matches this
+    # run's pinned inputs before any build step uses it.
+    if [[ ! -f "$br/.config" ]]; then
+        make -C "$base/buildroot" O="$br" esp32s3_devkit_c1_16m_defconfig
+        "$base/buildroot/utils/config" --file "$br/.config" --set-str TOOLCHAIN_EXTERNAL_PATH "$base/crosstool-NG/builds/xtensa-esp32s3-linux-uclibcfdpic"
+        "$base/buildroot/utils/config" --file "$br/.config" --set-str TOOLCHAIN_EXTERNAL_CUSTOM_PREFIX '$(ARCH)-esp32s3-linux-uclibcfdpic'
+        "$base/buildroot/utils/config" --file "$br/.config" --undefine PRIMARY_SITE --set-str PRIMARY_SITE 'https://sources.buildroot.net'
+        "$base/buildroot/utils/config" --file "$br/.config" --set-str WGET 'wget -nd -t 3 --timeout=20'
+    fi
     grep -qx 'BR2_PRIMARY_SITE="https://sources.buildroot.net"' "$br/.config"
-    "$base/buildroot/utils/config" --file "$br/.config" --set-str WGET 'wget -nd -t 3 --timeout=20'
+    grep -qx "BR2_TOOLCHAIN_EXTERNAL_PATH=\"$base/crosstool-NG/builds/xtensa-esp32s3-linux-uclibcfdpic\"" "$br/.config"
     test "$(git ls-remote https://github.com/jcmvbkbc/linux-xtensa.git "refs/tags/$LINUX_KERNEL_TAG^{}" | cut -f1)" = "$LINUX_KERNEL_REV"
     make -C "$base/buildroot" O="$br" BR2_JLEVEL="$JOBS"
     test -s "$br/images/rootfs.cramfs"

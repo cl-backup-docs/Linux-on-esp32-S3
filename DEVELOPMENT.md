@@ -30,7 +30,9 @@ all selected userspace, not only the base Buildroot image. It snapshots the
 source into a new output directory, compiles the Linux toolchain there,
 fetches pinned sources and builds a combined image without mounting any old
 experiment binaries or build tree. See [inputs, outputs and verification
-status](build/README.md).
+status](build/README.md). `REPRODUCE_DIR=/absolute/path` reuses a fixed output
+directory instead, which resumes the stages that finished — this is what the
+CI cache rests on; see the caching notes in that README.
 
 The final image is for offset 0x0 and replaces the whole flash, including
 configuration and user files. Hardware testing must back up a used board

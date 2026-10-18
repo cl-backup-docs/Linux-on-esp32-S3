@@ -12,6 +12,11 @@ and compiles the Linux toolchain, base system, ESP-IDF firmware, fork kernel,
 MMU payloads and selected userspace. No existing `refs/`, toolchain, image,
 experiment binary or compilation cache is mounted into the container.
 
+Set `REPRODUCE_DIR=/absolute/path` to work in a fixed directory instead of a
+fresh one. A reused directory keeps its `stages/*.done` markers, so a second
+run resumes the stages that finished; the continuous-integration caches below
+depend on that behaviour.
+
 The container uses host networking for downloads, but has no serial device
 or Docker socket. It cannot flash the board. Source and build outputs remain
 in the new directory; it does not overwrite the repository's stable images.
@@ -78,14 +83,40 @@ partition layouts stop the script before any esptool invocation.
 
 `.github/workflows/image.yml` is manual and runs the whole thing. Start it from
 the Actions tab with **Image → Run workflow**, on any branch. It runs the
-host-only checks, including the Paperboard console tests, then two complete
-builds from pinned sources in parallel, and then compares every artifact
-between them and publishes the result in the run summary. Each build uploads
-its images, checksums and logs.
+host-only checks, including the Paperboard console tests, then two builds from
+pinned sources in parallel, and then compares every artifact between them and
+publishes the result in the run summary. Each build uploads its images,
+checksums and logs.
 
-Expect a couple of hours; the job limit is six. The runner has no board, so
-`board_verification` stays `pending` in the manifest: flashing and the 27 board
-tests are still a local step.
+The builds are not thrown away. The workflow caches each expensive stage in
+the repository's 10 GB Actions cache. `container-build.sh` marks a finished
+stage with `stages/<name>.done` and skips it on resume, so one cache entry
+carries a stage's outputs and its marker together. A key hashes every file
+that stage reads — the pinned revisions, the build scripts, the patches and
+sources the stage injects, and for the rootfs, firmware and userspace stages
+the inputs of every earlier stage as well — so a hit restores exactly what a
+clean build of this commit would have produced, and any change falls back to
+rebuilding that stage from source. The Buildroot download and ESP-IDF tools
+entries hold only upstream archives that their own manifests verify, and are
+the only ones with a prefix fallback. An entry is saved only when a whole run
+succeeds, so a cache can never resume from a half-failed build.
+
+Both matrix jobs restore the same entries, and the comparison job still
+compares two builds made in the same run, so the "two builds agree" guarantee
+does not depend on what the caches held. Entries expire after seven days
+without access, and the oldest are evicted first once the budget is full.
+`build/container-build.sh` is part of every output key, so editing the build
+procedure deliberately invalidates the whole set on the next run. When
+changing what a stage reads, extend that stage's key list in
+`.github/workflows/image.yml`; a file missing from the list means a stale hit
+rather than an error. A run on a fresh branch, or after deleting the caches in
+the repository's Actions settings, starts cold on purpose.
+
+Expect a cold run (no usable cache) to take a couple of hours; a warm run
+rebuilds only what changed and finishes in well under half an hour once the
+caches are restored. The job limit is six hours. The runner has no board, so
+`board_verification` stays `pending` in the manifest: flashing and the 27
+board tests are still a local step.
 
 The older `build-linux.yml` builds the base system only and is kept for
 rebuilding that path; it is not the pipeline that produces the released image.
