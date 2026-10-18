@@ -25,6 +25,10 @@ int esp_send_packet(struct esp_adapter *adapter, struct sk_buff *skb);
 int esp_epd_init(struct esp_adapter *adapter);
 void esp_epd_deinit(void);
 
+int esp_kbd_init(struct esp_adapter *adapter);
+void esp_kbd_deinit(void);
+void esp_kbd_rx(struct sk_buff *skb);
+
 int esp_ble_prov_init(struct esp_adapter *adapter);
 void esp_ble_prov_deinit(void);
 void esp_ble_prov_rx(struct sk_buff *skb);

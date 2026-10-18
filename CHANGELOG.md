@@ -23,6 +23,20 @@ notes and the binaries are on the
   packaging run.
 - The manual `Image` workflow now runs the Paperboard console tests
   (`paperboard/tests/run.sh`) and parses its tooling in the host-only checks.
+- A USB keyboard on the **native USB port** (GPIO19/20) now drives the Linux
+  console, including the login prompt. Core 0 runs an IDF `usb_host` stack
+  (boot protocol; `paperboard/linux/usb_kbd.c`), report bytes are converted by
+  the host-tested `paperboard/common/hid_keymap.c`, and the kernel injects them
+  into the ttyS0 input queue (`esp32_uart_inject_input()` in
+  `drivers/tty/serial/esp32_uart.c`; new `esp_kbd.c` exposes root-only
+  `/dev/pbkbd`, read to observe and write to inject). Login and the mirrored
+  panel session see typed bytes exactly as if they arrived on the serial line;
+  plug-in/removal notices appear on the panel.
+- The 16 MB firmware profile turns off the USB-Serial/JTAG **secondary
+  console**, because the keyboard takes the USB PHY in host mode at runtime.
+  IDF logs stay on UART0 (the COM port); flashing through the native USB port
+  now needs **BOOT+RESET** instead of the automatic reset. Use an OTG adapter
+  (USB-C male to USB-A female) and a standard boot-protocol keyboard.
 
 ## 0.7 — fork, Bash and a userspace that fits (2026-09-08)
 

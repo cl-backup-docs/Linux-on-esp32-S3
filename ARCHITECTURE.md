@@ -21,14 +21,18 @@ ESP32-S3 (single chip, two Xtensa LX7 cores)
 ├── Core 0 — ESP-IDF / FreeRTOS ("network_adapter" app)
 │   ├── Owns the WiFi radio (closed blob) directly.
 │   │   Talks to Core 1 over shared memory (shmem IPC).
-│   └── NimBLE peripheral — advertises as "Esp32-Linux" (Nordic UART
-│       Service). A byte pipe only: it never drives the WiFi radio itself.
+│   ├── NimBLE peripheral — advertises as "Esp32-Linux" (Nordic UART
+│   │   Service). A byte pipe only: it never drives the WiFi radio itself.
+│   └── USB host — a boot keyboard on the native USB port becomes console
+│       input (ESP_KBD_IF messages; see paperboard/README.md)
 │
 └── Core 1 — Linux 6.11 (real, native Xtensa binary)
     ├── esp32-ng driver (drivers/net/wireless/espressif/esp32-ng/)
     │   ├── espsta0 — STA netdev, joins the home WiFi (wpa_supplicant).
     │   │             STA only: the AP side was removed (see below).
-    │   └── /dev/esp-ble — the other end of the BLE pipe (single reader)
+    │   ├── /dev/esp-ble — the other end of the BLE pipe (single reader)
+    │   ├── /dev/epd — mirrored console text for epd-shell and the ST7789
+    │   └── /dev/pbkbd — USB keyboard bytes injected into ttyS0 input
     ├── BusyBox services + Bash user shell, nano, Dash and GNU Make
     ├── MicroPython, socat/nc, cron, dtach sessions and process tools
     ├── wifi — interactive scan/connect helper for the STA uplink

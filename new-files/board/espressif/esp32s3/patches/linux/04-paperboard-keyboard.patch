@@ -1,0 +1,342 @@
+diff --git a/drivers/net/wireless/espressif/esp32-ng/Makefile b/drivers/net/wireless/espressif/esp32-ng/Makefile
+index a5099cf..5e6255d 100644
+--- a/drivers/net/wireless/espressif/esp32-ng/Makefile
++++ b/drivers/net/wireless/espressif/esp32-ng/Makefile
+@@ -1,5 +1,5 @@
+ obj-$(CONFIG_ESP32_WIFI)		+= esp32-wifi.o
+-esp32-wifi-objs				+= main.o esp_cmd.o esp_cfg80211.o esp_stats.o esp_utils.o esp_ble_prov.o esp_epd.o
++esp32-wifi-objs				+= main.o esp_cmd.o esp_cfg80211.o esp_stats.o esp_utils.o esp_ble_prov.o esp_epd.o esp_kbd.o
+ esp32-wifi-$(CONFIG_ESP32_BT)		+= esp_bt.o
+ esp32-wifi-$(CONFIG_ESP32_WIFI_SPI)	+= esp_spi.o
+ esp32-wifi-$(CONFIG_ESP32_WIFI_SDIO)	+= esp_sdio.o
+diff --git a/drivers/net/wireless/espressif/esp32-ng/adapter.h b/drivers/net/wireless/espressif/esp32-ng/adapter.h
+index 326395f..78f6a4d 100644
+--- a/drivers/net/wireless/espressif/esp32-ng/adapter.h
++++ b/drivers/net/wireless/espressif/esp32-ng/adapter.h
+@@ -56,6 +56,7 @@ enum ESP_INTERFACE_TYPE {
+ 	ESP_TEST_IF,
+ 	ESP_BLE_PROV_IF,
+ 	ESP_EPD_IF,
++	ESP_KBD_IF,
+ 	ESP_MAX_IF,
+ };
+ 
+diff --git a/drivers/net/wireless/espressif/esp32-ng/esp_api.h b/drivers/net/wireless/espressif/esp32-ng/esp_api.h
+index 8bcd201..080739d 100644
+--- a/drivers/net/wireless/espressif/esp32-ng/esp_api.h
++++ b/drivers/net/wireless/espressif/esp32-ng/esp_api.h
+@@ -30,6 +30,10 @@ int esp_send_packet(struct esp_adapter *adapter, struct sk_buff *skb);
+ int esp_epd_init(struct esp_adapter *adapter);
+ void esp_epd_deinit(void);
+ 
++int esp_kbd_init(struct esp_adapter *adapter);
++void esp_kbd_deinit(void);
++void esp_kbd_rx(struct sk_buff *skb);
++
+ int esp_ble_prov_init(struct esp_adapter *adapter);
+ void esp_ble_prov_deinit(void);
+ void esp_ble_prov_rx(struct sk_buff *skb);
+diff --git a/drivers/net/wireless/espressif/esp32-ng/esp_kbd.c b/drivers/net/wireless/espressif/esp32-ng/esp_kbd.c
+new file mode 100644
+index 0000000..5c23db3
+--- /dev/null
++++ b/drivers/net/wireless/espressif/esp32-ng/esp_kbd.c
+@@ -0,0 +1,179 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Paperboard USB keyboard bridge.
++ *
++ * The ESP32 firmware owns the USB-OTG host controller and forwards boot
++ * keyboard reports as ESP_KBD_IF payloads.  A keyboard has no wire to
++ * inject into, so the bytes are queued into the ttyS0 input stream: the
++ * login prompt, the shell and anything else reading the serial console
++ * see them exactly as if they had been typed on the serial line.
++ *
++ * The same stream is mirrored through /dev/pbkbd.  Reads observe what the
++ * keyboard sent; writes inject bytes directly into ttyS0.
++ */
++
++#include <linux/module.h>
++#include <linux/miscdevice.h>
++#include <linux/fs.h>
++#include <linux/poll.h>
++#include <linux/uaccess.h>
++#include <linux/skbuff.h>
++#include <linux/kfifo.h>
++#include <linux/mutex.h>
++#include <linux/wait.h>
++#include <linux/esp32_uart.h>
++
++#include "esp.h"
++#include "utils.h"
++#include "esp_api.h"
++
++#define ESP_KBD_DEV_NAME	"pbkbd"
++#define ESP_KBD_TTY_LINE	0	/* ttyS0 is the console */
++#define ESP_KBD_MAX_WRITE	256
++#define ESP_KBD_FIFO_SIZE	512
++
++static struct esp_adapter *kbd_adapter;
++static bool kbd_registered;
++static DEFINE_MUTEX(kbd_lock);
++static DECLARE_KFIFO(kbd_fifo, u8, ESP_KBD_FIFO_SIZE);
++static wait_queue_head_t kbd_wait;
++static atomic_t kbd_open = ATOMIC_INIT(0);
++
++static void esp_kbd_inject(const u8 *data, size_t len)
++{
++	int ret;
++
++	ret = esp32_uart_inject_input(ESP_KBD_TTY_LINE, data, len);
++	if (ret <= 0)
++		return;
++
++	kfifo_in(&kbd_fifo, data, ret);
++	wake_up_interruptible(&kbd_wait);
++}
++
++void esp_kbd_rx(struct sk_buff *skb)
++{
++	if (!skb)
++		return;
++
++	mutex_lock(&kbd_lock);
++	if (kbd_adapter && skb->len)
++		esp_kbd_inject(skb->data, skb->len);
++	mutex_unlock(&kbd_lock);
++
++	dev_kfree_skb_any(skb);
++}
++
++static int esp_kbd_open(struct inode *inode, struct file *file)
++{
++	if (atomic_xchg(&kbd_open, 1))
++		return -EBUSY;
++
++	mutex_lock(&kbd_lock);
++	kfifo_reset(&kbd_fifo);
++	mutex_unlock(&kbd_lock);
++
++	return 0;
++}
++
++static int esp_kbd_release(struct inode *inode, struct file *file)
++{
++	atomic_set(&kbd_open, 0);
++	return 0;
++}
++
++static ssize_t esp_kbd_read(struct file *file, char __user *buf,
++			    size_t count, loff_t *ppos)
++{
++	unsigned int copied;
++	int ret;
++
++	if (kfifo_is_empty(&kbd_fifo)) {
++		if (file->f_flags & O_NONBLOCK)
++			return -EAGAIN;
++
++		ret = wait_event_interruptible(kbd_wait,
++					       !kfifo_is_empty(&kbd_fifo));
++		if (ret)
++			return ret;
++	}
++
++	ret = kfifo_to_user(&kbd_fifo, buf, count, &copied);
++
++	return ret ? ret : copied;
++}
++
++static ssize_t esp_kbd_write(struct file *file, const char __user *buf,
++			     size_t count, loff_t *ppos)
++{
++	u8 data[ESP_KBD_MAX_WRITE];
++
++	if (!count)
++		return 0;
++	count = min_t(size_t, count, sizeof(data));
++	if (copy_from_user(data, buf, count))
++		return -EFAULT;
++
++	return esp32_uart_inject_input(ESP_KBD_TTY_LINE, data, count);
++}
++
++static __poll_t esp_kbd_poll(struct file *file, poll_table *wait)
++{
++	__poll_t mask = EPOLLOUT | EPOLLWRNORM;
++
++	poll_wait(file, &kbd_wait, wait);
++	if (!kfifo_is_empty(&kbd_fifo))
++		mask |= EPOLLIN | EPOLLRDNORM;
++
++	return mask;
++}
++
++static const struct file_operations esp_kbd_fops = {
++	.owner		= THIS_MODULE,
++	.open		= esp_kbd_open,
++	.release	= esp_kbd_release,
++	.read		= esp_kbd_read,
++	.write		= esp_kbd_write,
++	.poll		= esp_kbd_poll,
++	.llseek		= no_llseek,
++};
++
++static struct miscdevice esp_kbd_misc = {
++	.minor	= MISC_DYNAMIC_MINOR,
++	.name	= ESP_KBD_DEV_NAME,
++	.fops	= &esp_kbd_fops,
++	.mode	= 0600,
++};
++
++int esp_kbd_init(struct esp_adapter *adapter)
++{
++	int ret;
++
++	init_waitqueue_head(&kbd_wait);
++
++	ret = misc_register(&esp_kbd_misc);
++	if (ret) {
++		esp_err("Failed to register /dev/%s: %d\n",
++			ESP_KBD_DEV_NAME, ret);
++		return ret;
++	}
++
++	mutex_lock(&kbd_lock);
++	kbd_adapter = adapter;
++	kbd_registered = true;
++	mutex_unlock(&kbd_lock);
++
++	esp_info("USB keyboard bridge at /dev/%s\n", ESP_KBD_DEV_NAME);
++	return 0;
++}
++
++void esp_kbd_deinit(void)
++{
++	mutex_lock(&kbd_lock);
++	if (kbd_registered) {
++		misc_deregister(&esp_kbd_misc);
++		kbd_registered = false;
++	}
++	kbd_adapter = NULL;
++	mutex_unlock(&kbd_lock);
++}
+diff --git a/drivers/net/wireless/espressif/esp32-ng/main.c b/drivers/net/wireless/espressif/esp32-ng/main.c
+index bc8ca2f..f8f6e02 100644
+--- a/drivers/net/wireless/espressif/esp32-ng/main.c
++++ b/drivers/net/wireless/espressif/esp32-ng/main.c
+@@ -491,6 +491,8 @@ int esp_add_card(struct esp_adapter *adapter)
+ 	esp_ble_prov_init(adapter);
+ 	if (esp_epd_init(adapter))
+ 		esp_err("Paperboard: /dev/epd registration failed\n");
++	if (esp_kbd_init(adapter))
++		esp_err("Paperboard: /dev/pbkbd registration failed\n");
+ 
+ 	return 0;
+ }
+@@ -581,6 +583,7 @@ int esp_remove_card(struct esp_adapter *adapter)
+ 	}
+ 
+ 	esp_epd_deinit();
++	esp_kbd_deinit();
+ 	esp_stop_network_ifaces(adapter);
+ #ifdef CONFIG_ESP32_BT
+ 	/* BT may have been initialized after fw bootup event, deinit it */
+@@ -798,6 +801,9 @@ static void process_rx_packet(struct esp_adapter *adapter, struct sk_buff *skb)
+ 	} else if (payload_header->if_type == ESP_BLE_PROV_IF) {
+ 		esp_ble_prov_rx(skb);
+ 		return;
++	} else if (payload_header->if_type == ESP_KBD_IF) {
++		esp_kbd_rx(skb);
++		return;
+ 	} else if (payload_header->if_type == ESP_TEST_IF) {
+ #if TEST_RAW_TP
+ 		if (raw_tp_mode != 0) {
+diff --git a/drivers/tty/serial/esp32_uart.c b/drivers/tty/serial/esp32_uart.c
+index 2405751..0d60a6f 100644
+--- a/drivers/tty/serial/esp32_uart.c
++++ b/drivers/tty/serial/esp32_uart.c
+@@ -5,6 +5,7 @@
+ #include <linux/clk.h>
+ #include <linux/console.h>
+ #include <linux/delay.h>
++#include <linux/esp32_uart.h>
+ #include <linux/io.h>
+ #include <linux/irq.h>
+ #include <linux/module.h>
+@@ -746,6 +747,56 @@ static void esp32_uart_remove(struct platform_device *pdev)
+ 	uart_remove_one_port(&esp32_uart_reg, port);
+ }
+ 
++/**
++ * esp32_uart_inject_input() - queue bytes as if received on the wire
++ * @line: port line number (0 is ttyS0)
++ * @buf: bytes to queue
++ * @count: number of bytes in @buf
++ *
++ * Pushes data into the tty input queue of the port, exactly like
++ * esp32_uart_rxint() does for bytes read from the RX FIFO.  Nothing is
++ * written to the hardware.  Returns the number of bytes queued, or a
++ * negative error code.
++ */
++int esp32_uart_inject_input(unsigned int line, const u8 *buf, size_t count)
++{
++	struct esp32_port *sport;
++	struct uart_port *port;
++	struct tty_port *tty_port;
++	unsigned long flags;
++	size_t i;
++
++	if (line >= ARRAY_SIZE(esp32_uart_ports))
++		return -EINVAL;
++
++	sport = esp32_uart_ports[line];
++	if (!sport)
++		return -ENODEV;
++
++	port = &sport->port;
++
++	spin_lock_irqsave(&port->lock, flags);
++	if (!port->state) {
++		spin_unlock_irqrestore(&port->lock, flags);
++		return -ENXIO;
++	}
++	tty_port = &port->state->port;
++
++	for (i = 0; i < count; ++i) {
++		if (uart_handle_sysrq_char(port, buf[i]))
++			continue;
++		if (!tty_insert_flip_char(tty_port, buf[i], TTY_NORMAL))
++			break;
++		++port->icount.rx;
++	}
++	spin_unlock_irqrestore(&port->lock, flags);
++
++	tty_flip_buffer_push(tty_port);
++
++	return i;
++}
++EXPORT_SYMBOL_GPL(esp32_uart_inject_input);
++
+ 
+ static struct platform_driver esp32_uart_driver = {
+ 	.probe		= esp32_uart_probe,
+diff --git a/include/linux/esp32_uart.h b/include/linux/esp32_uart.h
+new file mode 100644
+index 0000000..3808a02
+--- /dev/null
++++ b/include/linux/esp32_uart.h
+@@ -0,0 +1,13 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later */
++/*
++ * ESP32 UART driver local input injection.
++ */
++
++#ifndef _LINUX_ESP32_UART_H
++#define _LINUX_ESP32_UART_H
++
++#include <linux/types.h>
++
++int esp32_uart_inject_input(unsigned int line, const u8 *buf, size_t count);
++
++#endif /* _LINUX_ESP32_UART_H */

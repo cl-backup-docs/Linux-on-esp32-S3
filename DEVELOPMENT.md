@@ -250,7 +250,7 @@ that matters.
 **Verified against fresh independent clones** (not against an already-patched
 tree): the buildroot patch applies to a fresh `jcmvbkbc/buildroot
 -b xtensa-2024.08-fdpic`, the firmware patch to a fresh `jcmvbkbc/esp-hosted
--b ipc-5.1.1`, and all three kernel patches to a fresh `jcmvbkbc/linux-xtensa
+-b ipc-5.1.1`, and the kernel patches to a fresh `jcmvbkbc/linux-xtensa
 -b xtensa-6.11-esp32-tag`.
 
 ### The kernel driver: a special case, already solved more robustly
@@ -348,11 +348,15 @@ that one directory match `new-files/` exactly.
 - `patches/04-kernel-esp32s3-rsa-crypto.patch` — adds the hardware RSA
   accelerator driver (`drivers/crypto/esp32s3_rsa.c`, 549 lines) plus its
   `obj-y` line. Applied automatically: the kernel patches live in
-  `new-files/board/espressif/esp32s3/patches/linux/` (as `01-` RSA, `02-` BLE
-  and `03-` cmdline, the order they are applied in), which is what
+  `new-files/board/espressif/esp32s3/patches/linux/` (as `01-` RSA, `02-` BLE,
+  `03-` cmdline and `03-paperboard-console` + `04-paperboard-keyboard`, the
+  order they are applied in), which is what
   `BR2_LINUX_KERNEL_PATCH` points at. Verified to apply cleanly with `patch -p1`
   and to reproduce the exact driver that the shipped `xipImage` was built from.
-  There used to be a fourth, `01-kernel-esp32ng-ap-support.patch`, carrying the
+  `03-paperboard-console` adds the `/dev/epd` text bridge;
+  `04-paperboard-keyboard` adds `esp_kbd.c` (`/dev/pbkbd`), the
+  `esp32_uart_inject_input()` entry point and its `include/linux/esp32_uart.h`
+  wrapper. There used to be a fourth, `01-kernel-esp32ng-ap-support.patch`, carrying the
   SoftAP; it is gone, and with it the only reason the esp32-ng driver diverged
   from upstream beyond the BLE pipe. Note the top-level numbering here has gaps
   (`00`, `02`, `03`, `04`) where the SoftAP and ESP-IDF patches used to sit —
@@ -365,6 +369,16 @@ that one directory match `new-files/` exactly.
   accelerator to Linux. Generated straight from the tree the shipped image was
   built from, so it reproduces it byte for byte. Applied automatically by
   `apply-local-changes.sh esp-hosted`.
+- `patches/05-firmware-usb-keyboard.patch` — the firmware side of the USB
+  keyboard: the `main/CMakeLists.txt` source list, the `usb_kbd_init()` call on
+  the boot path before `linux_boot()`, and `ESP_KBD_IF` in `adapter.h`. Applied
+  by `apply-local-changes.sh esp-hosted` immediately after the network-adapter
+  patch; the sources themselves (`main/usb_kbd.c`, `main/hid_keymap.c`,
+  `main/include/hid_keymap.h`) are copied from `paperboard/` like
+  `pb_console.c`, so they stay under the host tests. Needs the 16 MB profile's
+  `CONFIG_ESP_CONSOLE_SECONDARY_NONE` — the keyboard takes the USB PHY in host
+  mode at runtime, which is why flashing through the native USB port needs
+  BOOT+RESET and IDF logs only come out of UART0.
 - `patches/03-buildroot-tracked-changes.patch` — a single consolidated
   `git diff` of all tracked files modified under `build/buildroot/`
   (busybox.config, inetd.conf, wpa_supplicant.conf.example, both defconfigs).
@@ -374,7 +388,8 @@ that one directory match `new-files/` exactly.
   `apply-local-changes.sh buildroot`.
 - `kernel-driver-esp32-ng/` — a complete reference/human-readable copy of
   `drivers/net/wireless/espressif/esp32-ng/` (pristine upstream plus the BLE
-  pipe; STA only, no AP code at all); the patch above is what is actually used
+  pipe, the `/dev/epd` console bridge and the USB keyboard bridge; STA only, no
+  AP code at all); the patch above is what is actually used
   in the automated flow, this is a readable backup.
 - `new-files/` — an exact mirror of what has to be copied: `board/` and
   `configs/` go over `build/buildroot/` (automatic via
