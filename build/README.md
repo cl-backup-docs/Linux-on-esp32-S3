@@ -91,12 +91,12 @@ checksums and logs.
 The builds are not thrown away. The workflow caches each expensive stage in
 the repository's 10 GB Actions cache. `container-build.sh` marks a finished
 stage with `stages/<name>.done` and skips it on resume, so one cache entry
-carries a stage's outputs and its marker together. A key hashes every file
-that stage reads — the pinned revisions, the build scripts, the patches and
-sources the stage injects, and for the rootfs, firmware and userspace stages
-the inputs of every earlier stage as well — so a hit restores exactly what a
-clean build of this commit would have produced, and any change falls back to
-rebuilding that stage from source. The Buildroot download and ESP-IDF tools
+carries a stage's outputs and its marker together. A key hashes, straight from
+HEAD, every file that stage reads — the pinned revisions, the build scripts,
+the patches and sources the stage injects, and for the rootfs, firmware and
+userspace stages the inputs of every earlier stage as well — so a hit restores
+exactly what a clean build of this commit would have produced, and any change
+falls back to rebuilding that stage from source. The Buildroot download and ESP-IDF tools
 entries hold only upstream archives that their own manifests verify, and are
 the only ones with a prefix fallback. An entry is saved only when a whole run
 succeeds, so a cache can never resume from a half-failed build.
@@ -107,10 +107,10 @@ does not depend on what the caches held. Entries expire after seven days
 without access, and the oldest are evicted first once the budget is full.
 `build/container-build.sh` is part of every output key, so editing the build
 procedure deliberately invalidates the whole set on the next run. When
-changing what a stage reads, extend that stage's key list in
-`.github/workflows/image.yml`; a file missing from the list means a stale hit
-rather than an error. A run on a fresh branch, or after deleting the caches in
-the repository's Actions settings, starts cold on purpose.
+changing what a stage reads, extend that stage's list in
+`build/cache-keys.sh`; a file missing from the list means a stale hit rather
+than an error. A run on a fresh branch, or after deleting the caches in the
+repository's Actions settings, starts cold on purpose.
 
 Expect a cold run (no usable cache) to take a couple of hours; a warm run
 rebuilds only what changed and finishes in well under half an hour once the
