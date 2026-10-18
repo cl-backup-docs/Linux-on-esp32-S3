@@ -2,11 +2,12 @@
 
 ## Paperboard and headless builds
 
-This fork adds an ED097TC2 e-paper terminal for SVERIO Paperboard v1 and a
-separate display-disabled build for compatible ESP32-S3 N16R8 boards.
+This fork adds a JLX130-026 (ST7789, 240 × 240) SPI panel console for the
+SVERIO Paperboard v1 hardware and a separate display-disabled build for
+compatible ESP32-S3 N16R8 boards.
 **Both require 16 MB flash and 8 MB OPI PSRAM.**
 
-- `main`: Paperboard V3, automatic serial-shell mirroring to ED097TC2.
+- `main`: Paperboard V4, automatic serial-shell mirroring to the JLX130-026 panel.
 - `paperboard-headless`: Headless V1, no display initialization or shell mirroring.
 - [Web installer](web-installer/README.md): complete USB installation from desktop
   Chrome, with both firmware images included. Hosted installer:
@@ -16,8 +17,8 @@ separate display-disabled build for compatible ESP32-S3 N16R8 boards.
 After flashing, connect a serial terminal to UART0 (TX GPIO43, RX GPIO44),
 115200 baud, 8N1, no flow control. Log in as `root` / `changeme123` and run `wifi`
 to configure networking. Full images overwrite all flash, including settings and
-user files. The display build needs the Paperboard pinout; it is not a generic
-parallel-display driver configuration.
+user files. The display build expects the JLX130-026 wiring documented in
+paperboard/README.md; it is not a generic display driver configuration.
 
 The native Linux kernel and userspace originate from
 [paulneja/Linux-on-esp32-S3](https://github.com/paulneja/Linux-on-esp32-S3).

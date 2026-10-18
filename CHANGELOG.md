@@ -4,6 +4,26 @@ Releases carry one flashable `.bin` for a 16 MB / 8 MB-PSRAM ESP32-S3. Full
 notes and the binaries are on the
 [releases page](https://github.com/paulneja/Linux-on-esp32-S3/releases).
 
+## Unreleased — Paperboard V4: JLX130-026 TFT console
+
+- Replace the ED097TC2 e-paper output stage of the Paperboard console with an
+  ST7789 SPI driver for the JLX130-026 panel (1.3", 240 × 240 IPS, 4-wire SPI).
+  The firmware no longer links epdiy; the new driver lives in `paperboard/st7789/`.
+- The terminal grid becomes 30 × 15 cells at 8 × 16 pixels using the
+  BSD-2-Clause Spleen 8x16 font (generator: `paperboard/tools/bdf-to-font.py`).
+  Refreshes convert changed rows to RGB565 scanlines in internal RAM.
+- Default wiring: CS GPIO10, RST GPIO8, RS GPIO9, SDA GPIO11, SCK GPIO12 and
+  backlight LEDA on GPIO7; documented in paperboard/README.md.
+- Refresh latency drops from the e-paper write cycle to a 100 ms
+  post-activity redraw. The firmware banner marker is now `paperboard v4:`
+  and `build/package-final.py` checks for it.
+- The Linux ABI is unchanged: `/dev/epd`, the kernel driver and `epd-shell`
+  keep their names; only the PTY window size changes to 30 × 15 / 240 × 240.
+- Web installer binaries still carry the V3 e-paper firmware until the next
+  packaging run.
+- The manual `Image` workflow now runs the Paperboard console tests
+  (`paperboard/tests/run.sh`) and parses its tooling in the host-only checks.
+
 ## 0.7 — fork, Bash and a userspace that fits (2026-09-08)
 
 - Native NOMMU fork with private software banks, last-owner backup recovery,

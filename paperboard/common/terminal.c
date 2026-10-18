@@ -1,14 +1,6 @@
 #include "terminal.h"
 #include <string.h>
-#ifdef ESP_PLATFORM
-#include "esp_attr.h"
-#define PB_RASTER_ATTR IRAM_ATTR
-#define PB_FONT_STORAGE DRAM_ATTR
-#else
-#define PB_RASTER_ATTR
-#define PB_FONT_STORAGE
-#endif
-#include "font8x8_basic.h"
+#include "font8x16_basic.h"
 static void blank(PbCell* c) { c->ch = ' '; c->inverse = 0; }
 void pb_init(PbTerminal* t) {
     memset(t, 0, sizeof(*t)); t->cursor_visible = true;
@@ -97,31 +89,24 @@ void pb_feed(PbTerminal* t,const uint8_t* data,size_t len) {
         }
     }
 }
-static inline __attribute__((always_inline)) uint8_t glyph(const PbTerminal* t,unsigned row,unsigned col,unsigned dy) {
-    PbCell c=t->cells[row][col];
-    uint8_t bits=(dy>=4 && dy<20)?(uint8_t)font8x8_basic[c.ch<128?c.ch:'?'][(dy-4)/2]:0;
-    if(c.inverse) bits=~bits;
-    if(t->cursor_visible && row==t->y && col==t->x && dy>=22) bits=~bits;
-    return bits;
-}
-void PB_RASTER_ATTR pb_raster_line(void* context,int y,uint8_t* out) {
-    const PbRaster* r=context;
-    if(y<0||y>=PB_ROWS*24) {memset(out,0xff,PB_WIDTH);return;}
-    unsigned row=(unsigned)y/24,dy=(unsigned)y%24;
-    for(unsigned col=0;col<PB_COLS;col++) {
-        unsigned a=glyph(r->next,row,col,dy), b=glyph(r->shown,row,col,dy);
-        for(unsigned bit=0;bit<8;bit++) {
-            uint8_t v=((a&(1u<<bit))?0:0xf0)|((b&(1u<<bit))?0:0x0f);
-            *out++=v;*out++=v;
+void pb_render_cell_row(const PbTerminal* t,unsigned row,uint16_t* pixels) {
+    for(unsigned dy=0;dy<PB_CELL_H;dy++) {
+        for(unsigned col=0;col<PB_COLS;col++) {
+            PbCell c=t->cells[row][col];
+            // font8x16_basic bit 0 is the leftmost pixel.
+            uint8_t bits=font8x16_basic[c.ch<128?c.ch:'?'][dy];
+            if(c.inverse) bits=~bits;
+            // The cursor is a two-scanline underline below the glyph.
+            if(t->cursor_visible && row==t->y && col==t->x && dy>=PB_CELL_H-2) bits=c.inverse?0x00:0xff;
+            for(unsigned bit=0;bit<8;bit++) *pixels++=(bits&(1u<<bit))?PB_COLOR_FG:PB_COLOR_BG;
         }
     }
 }
-void pb_dirty_lines(const PbRaster* r,bool dirty[PB_HEIGHT]) {
-    memset(dirty,0,PB_HEIGHT*sizeof(bool));
+void pb_dirty_rows(const PbTerminal* next,const PbTerminal* shown,bool dirty[PB_ROWS]) {
     for(unsigned row=0;row<PB_ROWS;row++) {
-        bool changed=memcmp(r->next->cells[row],r->shown->cells[row],sizeof(r->next->cells[row]))!=0;
-        if(r->next->cursor_visible&&(r->next->y==row)) changed=true;
-        if(r->shown->cursor_visible&&(r->shown->y==row)) changed=true;
-        if(changed) for(unsigned dy=0;dy<24;dy++) dirty[row*24+dy]=true;
+        bool changed=memcmp(next->cells[row],shown->cells[row],sizeof(next->cells[row]))!=0;
+        if(next->cursor_visible&&(next->y==row)) changed=true;
+        if(shown->cursor_visible&&(shown->y==row)) changed=true;
+        dirty[row]=changed;
     }
 }

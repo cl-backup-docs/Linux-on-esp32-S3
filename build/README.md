@@ -78,9 +78,10 @@ partition layouts stop the script before any esptool invocation.
 
 `.github/workflows/image.yml` is manual and runs the whole thing. Start it from
 the Actions tab with **Image → Run workflow**, on any branch. It runs the
-host-only checks, then two complete builds from pinned sources in parallel, and
-then compares every artifact between them and publishes the result in the run
-summary. Each build uploads its images, checksums and logs.
+host-only checks, including the Paperboard console tests, then two complete
+builds from pinned sources in parallel, and then compares every artifact
+between them and publishes the result in the run summary. Each build uploads
+its images, checksums and logs.
 
 Expect a couple of hours; the job limit is six. The runner has no board, so
 `board_verification` stays `pending` in the manifest: flashing and the 27 board
@@ -89,8 +90,10 @@ tests are still a local step.
 The older `build-linux.yml` builds the base system only and is kept for
 rebuilding that path; it is not the pipeline that produces the released image.
 
-Run the host-only regression tests with `python3 build/test-flash.py` and
-`python3 build/test-shell-fallback.py`. They use temporary images, a simulated
+Run the host-only regression tests with `python3 build/test-flash.py`,
+`python3 build/test-shell-fallback.py` and `bash paperboard/tests/run.sh`
+(the last one compiles the terminal/font tests with clang and drives the login
+wrapper through a PTY). They use temporary images, a simulated
 esptool and a stub shell, never a serial device. The second one drives the
 low-memory shell hook with an artificial threshold, so it exercises the switch,
 the message and the retried command without needing a board that is actually

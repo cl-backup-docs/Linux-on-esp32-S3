@@ -58,23 +58,33 @@ esp-hosted)
 	echo "    (esp_driver/CMakeLists.txt runs 'git reset --hard' on every cmake invocation;"
 	echo "     a local commit is the only thing that survives that -- see DEVELOPMENT.md)"
 	cd build/esp-hosted/esp_hosted_ng
+	adapter=esp/esp_driver/network_adapter
+	need_commit=1
 	if git log --oneline -1 | grep -q "local-only, never push"; then
-		echo "    already committed locally -- skipping"
-	else
+		if [ -d "$adapter/components/st7789" ] && [ ! -d "$adapter/components/epdiy" ] &&
+		   [ -f "$adapter/main/font8x16_basic.h" ]; then
+			echo "    already committed locally -- skipping"
+			need_commit=0
+		else
+			echo "    local firmware commit is stale (display changed) -- re-applying"
+			git reset --hard HEAD~1
+		fi
+	fi
+	if [ "$need_commit" = 1 ]; then
 		git apply "$LOCAL/patches/02-firmware-network-adapter.patch"
 		cp "$LOCAL/new-files/esp-hosted/network_adapter/partition_table.esp32s3.16m8r" \
 			"$LOCAL/new-files/esp-hosted/network_adapter/sdkconfig.defaults.esp32s3.16m8r" \
-			esp/esp_driver/network_adapter/
-		mkdir -p esp/esp_driver/network_adapter/components/epdiy
-        cp -a "$LOCAL/paperboard/epdiy/." esp/esp_driver/network_adapter/components/epdiy/
-        cp "$LOCAL/paperboard/linux/pb_console.c" esp/esp_driver/network_adapter/main/
-        cp "$LOCAL/paperboard/common/terminal.c" "$LOCAL/paperboard/common/font8x8_basic.h" esp/esp_driver/network_adapter/main/
-        cp "$LOCAL/paperboard/common/terminal.h" esp/esp_driver/network_adapter/main/include/
-        git add esp/esp_driver/network_adapter/components/epdiy
-		git add esp/esp_driver/network_adapter/main/ \
-			esp/esp_driver/network_adapter/sdkconfig.defaults.esp32s3 \
-			esp/esp_driver/network_adapter/partition_table.esp32s3.16m8r \
-			esp/esp_driver/network_adapter/sdkconfig.defaults.esp32s3.16m8r
+			"$adapter/"
+		mkdir -p "$adapter/components/st7789"
+		cp -a "$LOCAL/paperboard/st7789/." "$adapter/components/st7789/"
+		cp "$LOCAL/paperboard/linux/pb_console.c" "$adapter/main/"
+		cp "$LOCAL/paperboard/common/terminal.c" "$LOCAL/paperboard/common/font8x16_basic.h" "$adapter/main/"
+		cp "$LOCAL/paperboard/common/terminal.h" "$adapter/main/include/"
+		git add "$adapter/components/st7789"
+		git add "$adapter/main/" \
+			"$adapter/sdkconfig.defaults.esp32s3" \
+			"$adapter/partition_table.esp32s3.16m8r" \
+			"$adapter/sdkconfig.defaults.esp32s3.16m8r"
 		git -c user.email="local@backup" -c user.name="local-backup" \
 			commit -m "network_adapter: this project's firmware (local-only, never push)"
 	fi

@@ -22,13 +22,15 @@ jobs:
 
       - name: Check the shell scripts parse
         run: |
-          for f in flash.sh make-images.sh build/reproduce.sh run.sh; do
+          for f in flash.sh make-images.sh build/reproduce.sh run.sh \
+                   new-files/toplevel/apply-local-changes.sh paperboard/tests/run.sh; do
             sh -n "$f" 2>/dev/null || bash -n "$f"
           done
 
       - name: Check the Python parses
         run: |
-          for f in build/*.py experiments/mmu-poc/programs/*.py; do
+          for f in build/*.py experiments/mmu-poc/programs/*.py \
+                   paperboard/tools/*.py paperboard/tests/*.py; do
             python3 -c "import ast,sys; ast.parse(open(sys.argv[1]).read())" "$f"
           done
 
@@ -37,6 +39,12 @@ jobs:
 
       - name: Shell fallback tests
         run: python3 build/test-shell-fallback.py
+
+      - name: Paperboard console tests
+        run: |
+          # Old clang ASan cannot start with the runners' high-entropy ASLR.
+          sudo sysctl vm.mmap_rnd_bits=28 || true
+          CC=$(command -v clang-18 || command -v clang) bash paperboard/tests/run.sh
 
   build:
     name: Full image ${{ matrix.run }}
