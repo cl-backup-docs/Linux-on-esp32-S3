@@ -23,6 +23,8 @@ ESP32-S3 (single chip, two Xtensa LX7 cores)
 │   │   Talks to Core 1 over shared memory (shmem IPC).
 │   ├── NimBLE peripheral — advertises as "Esp32-Linux" (Nordic UART
 │   │   Service). A byte pipe only: it never drives the WiFi radio itself.
+│   ├── NimBLE central — pairs a BLE HID (HOGP) keyboard whose keystrokes
+│   │   join the USB ones on the same ESP_KBD_IF path
 │   └── USB host — a boot keyboard on the native USB port becomes console
 │       input (ESP_KBD_IF messages; see paperboard/README.md)
 │
@@ -32,7 +34,7 @@ ESP32-S3 (single chip, two Xtensa LX7 cores)
     │   │             STA only: the AP side was removed (see below).
     │   ├── /dev/esp-ble — the other end of the BLE pipe (single reader)
     │   ├── /dev/epd — mirrored console text for epd-shell and the ST7789
-    │   └── /dev/pbkbd — USB keyboard bytes injected into ttyS0 input
+    │   └── /dev/pbkbd — keyboard bytes (USB or BLE) injected into ttyS0 input
     ├── BusyBox services + Bash user shell, nano, Dash and GNU Make
     ├── MicroPython, socat/nc, cron, dtach sessions and process tools
     ├── wifi — interactive scan/connect helper for the STA uplink
@@ -126,8 +128,8 @@ Linux FDPIC loader and the fork backend, not `mmu-run`.
 |---|---|---|---|
 | `nvs` | `0xa000` | 20K | ESP-IDF NVS (unused by Linux) |
 | `phy_init` | `0xf000` | 4K | WiFi PHY calibration data |
-| `factory` | `0x10000` | 768K | `network_adapter.bin` (Core 0 firmware) |
-| `etc` | `0xd0000` | 448K | jffs2, writable, wear-leveled — `/etc` |
+| `factory` | `0x10000` | 1M | `network_adapter.bin` (Core 0 firmware) |
+| `etc` | `0x110000` | 192K | jffs2, writable, wear-leveled — `/etc` |
 | `linux` | `0x140000` | 4M | `xipImage`, XIP kernel |
 | `rootfs` | `0x540000` | 7.5M | `rootfs.cramfs`, read-only root |
 | `home` | `0xcc0000` | 3.25M | jffs2, writable — `/home` |

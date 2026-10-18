@@ -62,7 +62,8 @@ esp-hosted)
 	need_commit=1
 	if git log --oneline -1 | grep -q "local-only, never push"; then
 		if [ -d "$adapter/components/st7789" ] && [ ! -d "$adapter/components/epdiy" ] &&
-		   [ -f "$adapter/main/font8x16_basic.h" ] && [ -f "$adapter/main/usb_kbd.c" ]; then
+		   [ -f "$adapter/main/font8x16_basic.h" ] && [ -f "$adapter/main/usb_kbd.c" ] &&
+		   [ -f "$adapter/main/ble_kbd.c" ]; then
 			echo "    already committed locally -- skipping"
 			need_commit=0
 		else
@@ -73,15 +74,18 @@ esp-hosted)
 	if [ "$need_commit" = 1 ]; then
 		git apply "$LOCAL/patches/02-firmware-network-adapter.patch"
 		git apply "$LOCAL/patches/05-firmware-usb-keyboard.patch"
+		git apply "$LOCAL/patches/06-firmware-ble-keyboard.patch"
 		cp "$LOCAL/new-files/esp-hosted/network_adapter/partition_table.esp32s3.16m8r" \
 			"$LOCAL/new-files/esp-hosted/network_adapter/sdkconfig.defaults.esp32s3.16m8r" \
 			"$adapter/"
 		mkdir -p "$adapter/components/st7789"
 		cp -a "$LOCAL/paperboard/st7789/." "$adapter/components/st7789/"
-		cp "$LOCAL/paperboard/linux/pb_console.c" "$LOCAL/paperboard/linux/usb_kbd.c" "$adapter/main/"
+		cp "$LOCAL/paperboard/linux/pb_console.c" "$LOCAL/paperboard/linux/usb_kbd.c" \
+			"$LOCAL/paperboard/linux/pb_kbd_bridge.c" "$LOCAL/paperboard/linux/ble_kbd.c" "$adapter/main/"
 		cp "$LOCAL/paperboard/common/terminal.c" "$LOCAL/paperboard/common/font8x16_basic.h" "$adapter/main/"
-		cp "$LOCAL/paperboard/common/terminal.h" "$LOCAL/paperboard/common/hid_keymap.h" "$adapter/main/include/"
-		cp "$LOCAL/paperboard/common/hid_keymap.c" "$adapter/main/"
+		cp "$LOCAL/paperboard/common/terminal.h" "$LOCAL/paperboard/common/hid_keymap.h" \
+			"$LOCAL/paperboard/common/hid_report.h" "$LOCAL/paperboard/linux/pb_kbd_bridge.h" "$adapter/main/include/"
+		cp "$LOCAL/paperboard/common/hid_keymap.c" "$LOCAL/paperboard/common/hid_report.c" "$adapter/main/"
 		git add "$adapter/components/st7789"
 		git add "$adapter/main/" \
 			"$adapter/sdkconfig.defaults.esp32s3" \

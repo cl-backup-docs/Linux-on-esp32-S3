@@ -19,12 +19,8 @@
 #include "esp_timer.h"
 #include "usb/usb_host.h"
 #include "usb/usb_helpers.h"
-#include "interface.h"
-#include "adapter.h"
 #include "hid_keymap.h"
-
-extern QueueHandle_t to_host_queue[MAX_PRIORITY_QUEUES];
-void pb_console_write(const uint8_t*, size_t);
+#include "pb_kbd_bridge.h"
 
 static const char* TAG = "usb_kbd";
 
@@ -51,37 +47,10 @@ static volatile bool dev_gone_pending;
 static volatile bool ctrl_done;
 static volatile usb_transfer_status_t ctrl_status;
 
-static void kbd_notice(const char* text) {
-    pb_console_write((const uint8_t*)text, strlen(text));
-}
-
-// One ESP_KBD_IF message for a burst of typed bytes; mirrors ble_prov_to_linux.
-static int kbd_send(const uint8_t* bytes, size_t len) {
-    interface_buffer_handle_t buf_handle;
-    uint8_t* buf;
-    if (!to_host_queue[PRIO_Q_MID])
-        return -1;
-    buf = malloc(len);
-    if (!buf)
-        return -1;
-    memcpy(buf, bytes, len);
-    memset(&buf_handle, 0, sizeof(buf_handle));
-    buf_handle.if_type = ESP_KBD_IF;
-    buf_handle.if_num = 0;
-    buf_handle.payload_len = len;
-    buf_handle.payload = buf;
-    buf_handle.wlan_buf_handle = buf;
-    buf_handle.free_buf_handle = free;
-    if (xQueueSend(to_host_queue[PRIO_Q_MID], &buf_handle, pdMS_TO_TICKS(20)) != pdTRUE) {
-        free(buf);
-        return -1;
-    }
-    return 0;
-}
 static void kbd_flush(void) {
     if (!pending_len)
         return;
-    if (kbd_send(pending, pending_len))
+    if (pb_kbd_send(pending, pending_len))
         ESP_LOGW(TAG, "dropped %u keyboard bytes, host link busy", (unsigned)pending_len);
     pending_len = 0;
 }
@@ -182,7 +151,7 @@ static void teardown_device(void) {
     pending_len = 0;
     pb_kbd_init(&kbd);
     ESP_LOGI(TAG, "USB keyboard removed");
-    kbd_notice("\r\n[usb keyboard removed]\r\n");
+    pb_kbd_notice("\r\n[usb keyboard removed]\r\n");
 }
 
 // Opens a freshly enumerated device and starts the report pump if it exposes
@@ -278,7 +247,7 @@ static bool probe_device(uint8_t addr) {
     kbd_submit();
     ESP_LOGI(TAG, "USB keyboard ready (device %04x:%04x, endpoint 0x%02x, mps %u)",
              (unsigned)dd->idVendor, (unsigned)dd->idProduct, kbd_ep, (unsigned)mps);
-    kbd_notice("\r\n[usb keyboard ready]\r\n");
+    pb_kbd_notice("\r\n[usb keyboard ready]\r\n");
     return true;
 }
 

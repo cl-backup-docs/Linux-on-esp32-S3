@@ -1,0 +1,32 @@
+diff --git a/esp_hosted_ng/esp/esp_driver/network_adapter/main/CMakeLists.txt b/esp_hosted_ng/esp/esp_driver/network_adapter/main/CMakeLists.txt
+index 47f0767..400ea11 100644
+--- a/esp_hosted_ng/esp/esp_driver/network_adapter/main/CMakeLists.txt
++++ b/esp_hosted_ng/esp/esp_driver/network_adapter/main/CMakeLists.txt
+@@ -1,4 +1,4 @@
+-set(COMPONENT_SRCS "app_main.c" "slave_bt.c" "cmd.c" "stats.c" "linux_boot.c" "linux_ipc.c" "linux_flash.c" "ble_prov.c" "pb_console.c" "terminal.c" "hid_keymap.c" "usb_kbd.c")
++set(COMPONENT_SRCS "app_main.c" "slave_bt.c" "cmd.c" "stats.c" "linux_boot.c" "linux_ipc.c" "linux_flash.c" "ble_prov.c" "pb_console.c" "terminal.c" "hid_keymap.c" "usb_kbd.c" "pb_kbd_bridge.c" "hid_report.c" "ble_kbd.c")
+ set(COMPONENT_ADD_INCLUDEDIRS "./include")
+ 
+ if(CONFIG_IDF_TARGET_ESP32S3)
+diff --git a/esp_hosted_ng/esp/esp_driver/network_adapter/main/app_main.c b/esp_hosted_ng/esp/esp_driver/network_adapter/main/app_main.c
+index 2934e06..8f07846 100644
+--- a/esp_hosted_ng/esp/esp_driver/network_adapter/main/app_main.c
++++ b/esp_hosted_ng/esp/esp_driver/network_adapter/main/app_main.c
+@@ -55,6 +55,7 @@
+ void pb_console_init(void);
+ void pb_console_write(const uint8_t*, size_t);
+ void usb_kbd_init(void);
++void ble_kbd_init(void);
+ 
+ static const char TAG[] = "FW_MAIN";
+ 
+@@ -706,6 +707,9 @@ void app_main()
+ 
+ 	pb_console_init();
+ 	usb_kbd_init();
++#ifdef CONFIG_BT_ENABLED
++	ble_kbd_init();
++#endif
+ 	void linux_boot(void);
+ 	linux_boot();
+ }

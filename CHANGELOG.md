@@ -37,6 +37,22 @@ notes and the binaries are on the
   IDF logs stay on UART0 (the COM port); flashing through the native USB port
   now needs **BOOT+RESET** instead of the automatic reset. Use an OTG adapter
   (USB-C male to USB-A female) and a standard boot-protocol keyboard.
+- A **BLE keyboard** can now pair with the board and type into the Linux
+  console alongside the USB one. Core 0 runs a NimBLE central
+  (`paperboard/linux/ble_kbd.c`) that finds a HID-over-GATT keyboard, pairs
+  (six-digit passkey shown on the panel when the keyboard wants one, bonds
+  persisted), reads the report map (`paperboard/common/hid_report.c`,
+  host-tested; 8-byte boot-protocol fallback) and injects reports through the
+  same `ESP_KBD_IF` path as the USB keyboard, so kernel, ttyS0 and
+  `/dev/pbkbd` are unchanged. The ESP32-S3 radio is BLE-only: classic
+  Bluetooth keyboards cannot work, and dongle keyboards already work as plain
+  USB. READY/disconnect notices appear on the panel and a bonded keyboard
+  reconnects after a reboot; provisioning still advertises with the keyboard
+  connected (NimBLE `MAX_CONNECTIONS` is 2).
+- The firmware partition grows from 768 KiB to 1 MiB and `etc` shrinks from
+  448 KiB to 192 KiB (`factory` +256 KiB, `etc` −256 KiB) to make room:
+  flashing the new layout needs one **full reflash** (or `flash.sh --parts`),
+  not a firmware-only update. `/etc` content stays far below 192 KiB.
 - The manual `Image` workflow now caches the expensive stages between runs in
   a fixed work directory: the built Linux toolchain, the Buildroot output, the
   ESP-IDF tree and the compiled userspace, about 1.5 GB together. Each key

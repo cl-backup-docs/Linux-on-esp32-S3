@@ -367,7 +367,7 @@ do_recover() {
 	local tool; tool=$(have esptool && echo esptool || echo esptool.py)
 	"$tool" --chip esp32s3 --port "$port" --baud 460800 \
 		--before default-reset --after no-reset \
-		write-flash 0xd0000 "$a/etc.jffs2" 0xcc0000 "$a/home.jffs2"
+		write-flash 0x110000 "$a/etc.jffs2" 0xcc0000 "$a/home.jffs2"
 	local rc=$?
 	[ "$rc" -eq 0 ] && green "partitions restored" || red "the restore failed"
 	return "$rc"

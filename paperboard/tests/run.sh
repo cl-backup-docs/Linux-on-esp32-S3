@@ -9,6 +9,8 @@ flags=(-std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined)
 "$tmp/terminal"
 "$cc" "${flags[@]}" -I common tests/test_hid_keymap.c common/hid_keymap.c -o "$tmp/hid_keymap"
 "$tmp/hid_keymap"
+"$cc" "${flags[@]}" -I common tests/test_hid_report.c common/hid_report.c common/hid_keymap.c -o "$tmp/hid_report"
+"$tmp/hid_report"
 "$cc" "${flags[@]}" -DCONFIG_IDF_TARGET_ESP32S3=1 -I tests/stubs -I epdiy/src \
     tests/test_queue.c epdiy/src/output_common/line_queue.c -o "$tmp/queue"
 "$tmp/queue"

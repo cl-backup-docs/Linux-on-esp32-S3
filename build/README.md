@@ -191,7 +191,7 @@ leaves the kernel and rootfs untouched:
 ```sh
 esptool --chip esp32s3 --port YOUR_COM_ADAPTER \
     --before default-reset --after no-reset \
-    write-flash 0xd0000 ARTIFACTS/etc.jffs2 0xcc0000 ARTIFACTS/home.jffs2
+    write-flash 0x110000 ARTIFACTS/etc.jffs2 0xcc0000 ARTIFACTS/home.jffs2
 ```
 
 If esptool left the freshly flashed board in its bootloader with

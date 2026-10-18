@@ -118,7 +118,7 @@ this — it is the filesystem repairing itself, not reporting a fault.
 
 Which of the two partitions it is: the offset is relative to the start of the
 partition, so compare it against `cat /proc/mtd`. Anything past `etc`'s
-`0x70000` can only be `home`.
+`0x30000` can only be `home`.
 
 Nothing important can be lost this way. The base system is a read-only cramfs
 and cannot be touched; what goes missing is whatever that one entry named,

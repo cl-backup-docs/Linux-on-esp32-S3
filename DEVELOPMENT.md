@@ -381,6 +381,16 @@ that one directory match `new-files/` exactly.
   `CONFIG_ESP_CONSOLE_SECONDARY_NONE` — the keyboard takes the USB PHY in host
   mode at runtime, which is why flashing through the native USB port needs
   BOOT+RESET and IDF logs only come out of UART0.
+- `patches/06-firmware-ble-keyboard.patch` — wires the BLE keyboard into the
+  firmware: `pb_kbd_bridge.c`, `hid_report.c` and `ble_kbd.c` join the source
+  list and `ble_kbd_init()` runs right after `usb_kbd_init()` under
+  `CONFIG_BT_ENABLED` (the NimBLE host task then owns scanning, pairing and the
+  report subscription). Applied by `apply-local-changes.sh esp-hosted` after
+  the USB keyboard patch; the sources are copied from `paperboard/` like the
+  others, under the host tests. Needs the NimBLE central + observer roles and
+  `CONFIG_BT_NIMBLE_MAX_CONNECTIONS=2` from
+  `new-files/esp-hosted/network_adapter/sdkconfig.defaults.esp32s3.16m8r`
+  (the keyboard connection must not lock out provisioning clients).
 - `patches/03-buildroot-tracked-changes.patch` — a single consolidated
   `git diff` of all tracked files modified under `build/buildroot/`
   (busybox.config, inetd.conf, wpa_supplicant.conf.example, both defconfigs).
@@ -423,6 +433,10 @@ cd ../..
 
 cd build/esp-hosted/esp_hosted_ng
 git apply "$REPO/patches/02-firmware-network-adapter.patch"
+git apply "$REPO/patches/05-firmware-usb-keyboard.patch"
+git apply "$REPO/patches/06-firmware-ble-keyboard.patch"
+# then copy the paperboard sources into esp/esp_driver/network_adapter/main/
+# and main/include/ exactly as apply-local-changes.sh esp-hosted does
 cp "$REPO"/new-files/esp-hosted/network_adapter/*.16m8r \
    esp/esp_driver/network_adapter/
 git add esp/esp_driver/network_adapter/

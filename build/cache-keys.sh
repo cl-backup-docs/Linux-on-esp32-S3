@@ -28,7 +28,7 @@ digest() {
 
 common='build/sources.lock build/container-build.sh build/pin-toolchain.py'
 rootfs_extra='new-files/board new-files/configs new-files/toplevel/apply-local-changes.sh patches/03-buildroot-tracked-changes.patch'
-firmware_extra='patches/02-firmware-network-adapter.patch patches/05-firmware-usb-keyboard.patch new-files/esp-hosted paperboard/st7789 paperboard/linux/pb_console.c paperboard/linux/usb_kbd.c paperboard/common/terminal.c paperboard/common/terminal.h paperboard/common/hid_keymap.c paperboard/common/hid_keymap.h paperboard/common/font8x16_basic.h'
+firmware_extra='patches/02-firmware-network-adapter.patch patches/05-firmware-usb-keyboard.patch patches/06-firmware-ble-keyboard.patch new-files/esp-hosted paperboard/st7789 paperboard/linux/pb_console.c paperboard/linux/usb_kbd.c paperboard/linux/pb_kbd_bridge.c paperboard/linux/pb_kbd_bridge.h paperboard/linux/ble_kbd.c paperboard/common/terminal.c paperboard/common/terminal.h paperboard/common/hid_keymap.c paperboard/common/hid_keymap.h paperboard/common/hid_report.c paperboard/common/hid_report.h paperboard/common/font8x16_basic.h'
 userspace_extra='experiments paperboard/linux/epd-shell.c'
 
 # shellcheck disable=SC2086

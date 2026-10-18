@@ -109,7 +109,7 @@ Payloads requieren `-mno-fdpic`, `-Wl,-m,elf32xtensa` y `payload.ld`.
 
 `make-test-images.sh` compila, prueba y valida; **nunca flashea ni publica**.
 `out/rootfs-probe.cramfs` va en `0x540000`.
-La mitigación `out/etc-no-history.jffs2` va en `0xd0000` solo cuando sea necesario
+La mitigación `out/etc-no-history.jffs2` va en `0x110000` solo cuando sea necesario
 reemplazar esa partición. `images/` permanece intacto.
 
 ## Límites y seguridad

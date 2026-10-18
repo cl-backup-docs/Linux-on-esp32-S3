@@ -78,6 +78,30 @@ Requirements and consequences:
   flashing through the native USB port now needs BOOT+RESET instead of the
   automatic reset.
 
+## Bluetooth (BLE) keyboard
+
+A BLE HID (HOGP) keyboard pairs with the board directly — no dongle, no serial
+link — and types into the same Linux console input as the USB keyboard. Core 0
+runs a NimBLE central (`linux/ble_kbd.c`): it finds a keyboard advertising the
+HID service or the keyboard appearance, pairs (showing the six-digit passkey
+on the panel when the keyboard wants one), reads the device's report map, and
+converts each input report with `common/hid_report.c` into the 8-byte shape
+`common/hid_keymap.c` already understands. Keyboards without a usable map fall
+back to the 8-byte boot protocol when they offer it. The bytes leave as
+`ESP_KBD_IF` messages exactly like USB ones, so kernel, ttyS0 and `/dev/pbkbd`
+are unchanged.
+
+The ESP32-S3 radio is BLE-only: keyboards that pair over classic Bluetooth
+cannot work, and a 2.4 GHz keyboard with its own USB dongle needs no firmware
+support at all — the dongle is a plain USB keyboard.
+
+Put the keyboard in pairing mode near the board. The panel shows
+`[ble] scanning for keyboard...`, the passkey when one is needed,
+`[ble keyboard ready]` when typing is live, and
+`[ble] keyboard disconnected; rescanning` if it goes away. A bonded keyboard
+reconnects on its own after a reboot (bonds live in the `nvs` partition), and
+the provisioning service still advertises while the keyboard is connected.
+
 ## Build and test
 
 On a Linux build host with Docker, from a clean committed checkout:
@@ -99,8 +123,8 @@ The ED097TC2 e-paper console reached V3, which was built and reported working
 after V1/V2 had line queue underruns during Linux activity. V4 replaces that
 output stage with the ST7789 driver described above; parser, renderer and
 login-wrapper host tests pass, and the panel has been confirmed on real
-hardware. The USB keyboard path is host-tested (`tests/test_hid_keymap.c`);
-on-hardware verification is pending the first flash with keyboard support.
+hardware. The USB and BLE keyboard paths are host-tested (`tests/test_hid_keymap.c`,
+`tests/test_hid_report.c`); on-hardware verification of both is pending.
 Headless V1 was built; the ELF flag and final rootfs were verified
 to disable display initialization and automatic mirroring, respectively.
 
