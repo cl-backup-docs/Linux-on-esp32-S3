@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Print the Image workflow's cache keys as GitHub-output name=value lines.
 #
-# Each key hashes the git objects of every file its stage reads, straight from
-# HEAD. That matches what reproduce.sh snapshots with `git archive HEAD`, and
-# it cannot be tripped by the dangling busybox symlink in the rootfs overlay
-# (`hashFiles` in an expression throws on those) or by uncommitted
-# working-tree edits.
+# Each value is one SHA-1 over the `git ls-tree -r HEAD` listings of every
+# file its stage reads, straight from HEAD. That matches what reproduce.sh
+# snapshots with `git archive HEAD`, it cannot be tripped by the dangling
+# busybox symlink in the rootfs overlay (`hashFiles` in an expression throws
+# on those) or by uncommitted working-tree edits, and one hash per key stays
+# inside the 512-character cache-key limit however many paths a stage reads.
 #
 # Every output cache also depends on the build procedure and the pinned
 # revisions, and each later stage's key includes the inputs of the stages
@@ -19,14 +20,12 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 digest() {
-	local output='' path hash
+	local path
 	for path in "$@"; do
 		git cat-file -e "HEAD:$path" 2>/dev/null ||
 			{ echo "cache-keys: no such path in HEAD: $path" >&2; return 1; }
-		hash=$(git ls-tree -r HEAD -- "$path" | git hash-object --stdin)
-		output+="$hash-"
 	done
-	printf '%s' "$output"
+	git ls-tree -r HEAD -- "$@" | git hash-object --stdin
 }
 
 common='build/sources.lock build/container-build.sh build/pin-toolchain.py'
